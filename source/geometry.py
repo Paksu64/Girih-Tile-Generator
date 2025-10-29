@@ -3,6 +3,11 @@ import matplotlib.pyplot as plt
 
 phi = (1 + 5**0.5) / 2
 
+def rot(vx, vy, deg):
+    r = math.radians(deg)
+    c, s_ = math.cos(r), math.sin(r)
+    return (c*vx - s_*vy, s_*vx + c*vy)
+
 class Polygon:
     def __init__(self, n, radius=1.0):
         self.n = n
@@ -37,7 +42,7 @@ class Polygon:
             u_hat = (dx / length, dy / length)
 
             # Left normal (rotate +90°)
-            n_hat = (u_hat[1], u_hat[0])
+            n_hat = (-u_hat[1], u_hat[0])
 
             return u_hat, n_hat, length
 
@@ -48,27 +53,84 @@ class Polygon:
         plt.axis('equal')
         plt.show()
 
-
 class Rhombus(Polygon):
-    def __init__(self, base_polygon, edge_index, acute_deg=72.0):
-        # Edge geometry from the base polygon
+    def __init__(self, base_polygon, edge_index, acute_deg=72.0, acute_at_A=True, outward=True):
+        import math
+
+        def signed_area(pts):
+            a = 0.0
+            for i in range(len(pts)):
+                x1, y1 = pts[i]
+                x2, y2 = pts[(i + 1) % len(pts)]
+                a += x1 * y2 - x2 * y1
+            return 0.5 * a
+
         A, B = base_polygon.edge(edge_index)
-        u_hat, n_hat, length = base_polygon.edge_unit_vectors(edge_index)
+        u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
 
-        # Compute height from the edge length
-        h = length * math.sin(math.radians(acute_deg))
+        alpha = float(acute_deg)
 
-        # Four points of the rhombus
-        Ax, Ay = A
-        Bx, By = B
-        nx, ny = n_hat
-        C = (Bx + nx * h, By + ny * h)
-        D = (Ax + nx * h, Ay + ny * h)
-        points = [A, B, C, D]
+        # exterior turns at B, C, D (degrees)
+        # interiors: [α, 180-α, α, 180-α] if acute_at_A else flipped
+        if acute_at_A:
+            turns = [alpha, 180.0 - alpha, alpha]
+        else:
+            turns = [180.0 - alpha, alpha, 180.0 - alpha]
+
+        ccw = signed_area(base_polygon.points) > 0
+        turn_sign = -1 if outward and ccw else (1 if outward and not ccw else (1 if ccw else -1))
+
+        pts = [A, B]
+        dirx, diry = u_hat
+        curx, cury = B
+
+        # make C and D; last edge (D->A) closes the rhombus
+        for t in turns[:2]:
+            dirx, diry = rot(dirx, diry, turn_sign * t)
+            curx, cury = curx + s*dirx, cury + s*diry
+            pts.append((curx, cury))
 
         self.n = 4
-        self.radius = length
-        self.points = points
+        self.radius = s
+        self.points = pts
+
+class ElongatedHexagon(Polygon):
+    def __init__(self, base_polygon, edge_index, acute_at_A=True, outward=True):
+        import math
+
+        def signed_area(pts):
+            a = 0.0
+            for i in range(len(pts)):
+                x1, y1 = pts[i]
+                x2, y2 = pts[(i + 1) % len(pts)]
+                a += x1 * y2 - x2 * y1
+            return 0.5 * a
+
+        A, B = base_polygon.edge(edge_index)
+        u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
+
+        # interior pattern starting at A
+        left_turns = ([108.0, 36.0, 108.0, 36.0, 36.0, 36.0]
+                     if acute_at_A else
+                     [36.0, 36.0, 36.0, 108.0, 36.0, 108.0])
+
+        # choose sign so that "outward=True" goes outside regardless of CW/CCW
+        ccw = signed_area(base_polygon.points) > 0
+        turn_sign = -1 if outward and ccw else (1 if outward and not ccw else 1 if ccw else -1)
+
+        pts = [A, B]
+        dirx, diry = u_hat
+        curx, cury = B
+
+        # apply turns at B, C, D, E (F->A closes)
+        for t in left_turns[1:5]:
+            dirx, diry = rot(dirx, diry, turn_sign * t)
+            curx, cury = curx + s*dirx, cury + s*diry
+            pts.append((curx, cury))
+
+        self.n = 6
+        self.radius = s
+        self.points = pts
 
 
 def draw_poly(points, ax, color):
