@@ -8,6 +8,14 @@ def rot(vx, vy, deg):
     c, s_ = math.cos(r), math.sin(r)
     return (c*vx - s_*vy, s_*vx + c*vy)
 
+def signed_area(pts):
+    a = 0.0
+    for i in range(len(pts)):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % len(pts)]
+        a += x1 * y2 - x2 * y1
+    return 0.5 * a
+
 class Polygon:
     def __init__(self, n, radius=1.0):
         self.n = n
@@ -57,14 +65,6 @@ class Rhombus(Polygon):
     def __init__(self, base_polygon, edge_index, acute_deg=72.0, acute_at_A=True, outward=True):
         import math
 
-        def signed_area(pts):
-            a = 0.0
-            for i in range(len(pts)):
-                x1, y1 = pts[i]
-                x2, y2 = pts[(i + 1) % len(pts)]
-                a += x1 * y2 - x2 * y1
-            return 0.5 * a
-
         A, B = base_polygon.edge(edge_index)
         u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
 
@@ -98,14 +98,6 @@ class ElongatedHexagon(Polygon):
     def __init__(self, base_polygon, edge_index, acute_at_A=True, outward=True):
         import math
 
-        def signed_area(pts):
-            a = 0.0
-            for i in range(len(pts)):
-                x1, y1 = pts[i]
-                x2, y2 = pts[(i + 1) % len(pts)]
-                a += x1 * y2 - x2 * y1
-            return 0.5 * a
-
         A, B = base_polygon.edge(edge_index)
         u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
 
@@ -124,6 +116,29 @@ class ElongatedHexagon(Polygon):
 
         # apply turns at B, C, D, E (F->A closes)
         for t in left_turns[1:5]:
+            dirx, diry = rot(dirx, diry, turn_sign * t)
+            curx, cury = curx + s*dirx, cury + s*diry
+            pts.append((curx, cury))
+
+        self.n = 6
+        self.radius = s
+        self.points = pts
+
+class Bowtie(Polygon):
+    def __init__(self, base_polygon, edge_index, outward=True):
+        A, B = base_polygon.edge(edge_index)
+        u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
+
+        turns = [108.0, 324.0, 108.0, 108.0, 324.0]
+
+        ccw = signed_area(base_polygon.points) > 0
+        turn_sign = -1 if outward and ccw else (1 if outward and not ccw else (1 if ccw else -1))
+
+        pts = [A, B]
+        dirx, diry = u_hat
+        curx, cury = B
+
+        for t in turns:
             dirx, diry = rot(dirx, diry, turn_sign * t)
             curx, cury = curx + s*dirx, cury + s*diry
             pts.append((curx, cury))

@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from geometry import Polygon, Rhombus, ElongatedHexagon, draw_poly
+from geometry import Polygon, Rhombus, ElongatedHexagon, Bowtie, draw_poly
 from animator import animator
 
 def signed_area(points):
@@ -39,6 +39,7 @@ def test():
     eh = ElongatedHexagon(dec, edge_index=7)
     eh2 = ElongatedHexagon(dec, edge_index=9, acute_at_A=False)
     eh3 = ElongatedHexagon(dec, edge_index=8, acute_at_A=False)
+    bt = Bowtie(dec, edge_index=3)
 
     anim = animator(figsize=(6, 6))
     anim._fig.patch.set_facecolor("black")
@@ -50,7 +51,7 @@ def test():
     anim.add_polygon(eh2.points, color="#bde998", linewidth=2.0)
     anim.add_polygon(rh2.points, color="#989ce9", linewidth=2.0)
     anim.add_polygon(eh3.points, color="#bde998", linewidth=2.0)
-
+    anim.add_polygon(bt.points, color="#e998b5", linewidth=2.0)
     # Debug edge frames
     # draw_edge_frame(anim._ax, dec, edge_index=0, scale=0.35, show_outward=True)
     # draw_edge_frame(anim._ax, dec, edge_index=7, scale=0.35, show_outward=True)
