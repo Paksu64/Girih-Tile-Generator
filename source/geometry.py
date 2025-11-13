@@ -1,162 +1,154 @@
+import turtle
 import math
-import matplotlib.pyplot as plt
 
-phi = (1 + 5**0.5) / 2
+# --------------------------------------------------------------
+# Utilities
+# --------------------------------------------------------------
 
-def rot(vx, vy, deg):
-    r = math.radians(deg)
-    c, s_ = math.cos(r), math.sin(r)
-    return (c*vx - s_*vy, s_*vx + c*vy)
+def rotateVector(vx, vy, angleDeg):
+    # Rotate a 2D vector by angleDeg degrees.
+    radians = math.radians(angleDeg)
+    cosA, sinA = math.cos(radians), math.sin(radians)
+    rotatedX = cosA * vx - sinA * vy
+    rotatedY = sinA * vx + cosA * vy
+    return rotatedX, rotatedY
 
-def signed_area(pts):
-    a = 0.0
-    for i in range(len(pts)):
-        x1, y1 = pts[i]
-        x2, y2 = pts[(i + 1) % len(pts)]
-        a += x1 * y2 - x2 * y1
-    return 0.5 * a
 
-class Polygon:
-    def __init__(self, n, radius=1.0):
-        self.n = n
-        self.radius = radius
-        self.points = []
-        self.generate()
+def signedArea(vertices):
+    # Signed polygon area used to detect orientation (CW/CCW).
+    area = 0.0
+    for i in range(len(vertices)):
+        x1, y1 = vertices[i]
+        x2, y2 = vertices[(i + 1) % len(vertices)]
+        area += x1 * y2 - x2 * y1
+    return 0.5 * area
 
-    def generate(self):
-        self.points = []
-        for i in range(self.n):
-            angle = math.radians(i * (360 / self.n))
-            x = self.radius * math.cos(angle)
-            y = self.radius * math.sin(angle)
-            self.points.append((x,y))
 
-    def edge(self, i):
-        A = self.points[i % self.n]
-        B = self.points[(i + 1) % self.n]
-        return A, B
+def getEdgeAngle(tile, edgeIndex):
+    # Return world angle of the tile's edgeIndex in degrees.
+    pointA = tile.worldVertices[edgeIndex]
+    pointB = tile.worldVertices[(edgeIndex + 1) % len(tile.worldVertices)]
+    dx = pointB[0] - pointA[0]
+    dy = pointB[1] - pointA[1]
+    return math.degrees(math.atan2(dy, dx))
 
-    def edge_unit_vectors(self, i):
-            (Ax, Ay), (Bx, By) = self.edge(i)
 
-            # Direction vector from A to B
-            dx = Bx - Ax
-            dy = By - Ay
+def rotateEdgeToAngle(tile, edgeIndex, targetAngleDeg):
+    # Rotate entire tile so chosen edge points toward targetAngleDeg.
+    currentAngle = getEdgeAngle(tile, edgeIndex)
+    deltaAngle = targetAngleDeg - currentAngle
+    tile.angleDeg += deltaAngle
+    tile.updateWorldVertices()
 
-            # Edge length (magnitude of direction vector)
-            length = math.hypot(dx, dy)
 
-            # Unit vector along the edge
-            u_hat = (dx / length, dy / length)
+def moveEdgeStartTo(tile, edgeIndex, targetX, targetY):
+    # Tile translation so that edgeIndex's start vertex is (targetX, targetY).
+    pointA = tile.worldVertices[edgeIndex]
+    dx = targetX - pointA[0]
+    dy = targetY - pointA[1]
+    tile.posX += dx
+    tile.posY += dy
+    tile.updateWorldVertices()
 
-            # Left normal (rotate +90°)
-            n_hat = (-u_hat[1], u_hat[0])
+class TileBase:
+    """
+    Base class for all Girih tiles.
+    Handles:
+      - localVertices
+      - world transformation (translation + rotation)
+      - freeEdges
+      - turtle rendering
+    """
 
-            return u_hat, n_hat, length
+    def __init__(self, tileType, localVertices, x=0, y=0, angle=0):
+        self.tileType = tileType
+        self.localVertices = localVertices
+        self.posX = x
+        self.posY = y
+        self.angleDeg = angle
 
-    def draw(self):
-        xs = [x for x, y in self.points] + [self.points[0][0]]
-        ys = [y for x, y in self.points] + [self.points[0][1]]
-        plt.plot(xs, ys, '-o')
-        plt.axis('equal')
-        plt.show()
+        # Computed world vertices
+        self.worldVertices = []
+        self.updateWorldVertices()
 
-class Rhombus(Polygon):
-    def __init__(self, base_polygon, edge_index, acute_deg=72.0, acute_at_A=True, outward=True):
-        import math
+        vertexCount = len(self.localVertices)
+        self.freeEdges = [(i, (i + 1) % vertexCount) for i in range(vertexCount)]
 
-        A, B = base_polygon.edge(edge_index)
-        u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
+    def updateWorldVertices(self):
+        # Compute world coordinates from local vertices.
+        newVertices = []
+        rad = math.radians(self.angleDeg)
+        cosA, sinA = math.cos(rad), math.sin(rad)
 
-        alpha = float(acute_deg)
+        for (localX, localY) in self.localVertices:
+            rotatedX = cosA * localX - sinA * localY
+            rotatedY = sinA * localX + cosA * localY
+            newVertices.append((self.posX + rotatedX, self.posY + rotatedY))
 
-        # exterior turns at B, C, D (degrees)
-        # interiors: [α, 180-α, α, 180-α] if acute_at_A else flipped
-        if acute_at_A:
-            turns = [alpha, 180.0 - alpha, alpha]
+        self.worldVertices = newVertices
+
+    def getEdgeMidpoint(self, edgeIndex):
+        # Return midpoint of world edge edgeIndex.
+        A = self.worldVertices[edgeIndex]
+        B = self.worldVertices[(edgeIndex + 1) % len(self.worldVertices)]
+        midX = (A[0] + B[0]) / 2
+        midY = (A[1] + B[1]) / 2
+        return (midX, midY)
+
+    def drawGirihStar(self, step=2, color="blue", penSize=2):
+        turtle.color(color)
+        turtle.pensize(penSize)
+
+        vertexCount = len(self.worldVertices)
+
+        # Edge midpoints
+        midpoints = [self.getEdgeMidpoint(i) for i in range(vertexCount)]
+
+        # Draw path
+        turtle.penup()
+        turtle.goto(midpoints[0])
+        turtle.pendown()
+
+        # Number of jumps
+        jumps = vertexCount // math.gcd(vertexCount, step)
+        index = 0
+
+        for _ in range(jumps):
+            index = (index + step) % vertexCount
+            turtle.goto(midpoints[index])
+
+        # Close
+        turtle.goto(midpoints[0])
+
+    def draw(self, color="white", animate=False, delayMs=2):
+        vertices = self.worldVertices
+
+        turtle.color(color)
+        turtle.penup()
+        turtle.goto(vertices[0])
+        turtle.pendown()
+
+        if animate:
+            for v in vertices[1:]:
+                turtle.goto(v)
+                turtle.update()
+                turtle.delay(delayMs)
+            turtle.goto(vertices[0])
+            turtle.update()
         else:
-            turns = [180.0 - alpha, alpha, 180.0 - alpha]
+            for v in vertices[1:]:
+                turtle.goto(v)
+            turtle.goto(vertices[0])
 
-        ccw = signed_area(base_polygon.points) > 0
-        turn_sign = -1 if outward and ccw else (1 if outward and not ccw else (1 if ccw else -1))
+    # ----------------------------------------------------------
+    def getEdgeVector(self, edgeIndex):
+        A = self.worldVertices[edgeIndex]
+        B = self.worldVertices[(edgeIndex + 1) % len(self.worldVertices)]
+        return B[0] - A[0], B[1] - A[1]
 
-        pts = [A, B]
-        dirx, diry = u_hat
-        curx, cury = B
+    def attachToEdge(self, targetTile, myEdgeIndex, targetEdgeIndex):
+        desiredDirection = getEdgeAngle(targetTile, targetEdgeIndex)
+        rotateEdgeToAngle(self, myEdgeIndex, desiredDirection)
 
-        # make C and D; last edge (D->A) closes the rhombus
-        for t in turns[:2]:
-            dirx, diry = rot(dirx, diry, turn_sign * t)
-            curx, cury = curx + s*dirx, cury + s*diry
-            pts.append((curx, cury))
-
-        self.n = 4
-        self.radius = s
-        self.points = pts
-
-class ElongatedHexagon(Polygon):
-    def __init__(self, base_polygon, edge_index, acute_at_A=True, outward=True):
-        import math
-
-        A, B = base_polygon.edge(edge_index)
-        u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
-
-        # interior pattern starting at A
-        left_turns = ([108.0, 36.0, 108.0, 36.0, 36.0, 36.0]
-                     if acute_at_A else
-                     [36.0, 36.0, 36.0, 108.0, 36.0, 108.0])
-
-        # choose sign so that "outward=True" goes outside regardless of CW/CCW
-        ccw = signed_area(base_polygon.points) > 0
-        turn_sign = -1 if outward and ccw else (1 if outward and not ccw else 1 if ccw else -1)
-
-        pts = [A, B]
-        dirx, diry = u_hat
-        curx, cury = B
-
-        # apply turns at B, C, D, E (F->A closes)
-        for t in left_turns[1:5]:
-            dirx, diry = rot(dirx, diry, turn_sign * t)
-            curx, cury = curx + s*dirx, cury + s*diry
-            pts.append((curx, cury))
-
-        self.n = 6
-        self.radius = s
-        self.points = pts
-
-class Bowtie(Polygon):
-    def __init__(self, base_polygon, edge_index, outward=True):
-        A, B = base_polygon.edge(edge_index)
-        u_hat, _, s = base_polygon.edge_unit_vectors(edge_index)
-
-        turns = [108.0, 324.0, 108.0, 108.0, 324.0]
-
-        ccw = signed_area(base_polygon.points) > 0
-        turn_sign = -1 if outward and ccw else (1 if outward and not ccw else (1 if ccw else -1))
-
-        pts = [A, B]
-        dirx, diry = u_hat
-        curx, cury = B
-
-        for t in turns:
-            dirx, diry = rot(dirx, diry, turn_sign * t)
-            curx, cury = curx + s*dirx, cury + s*diry
-            pts.append((curx, cury))
-
-        self.n = 6
-        self.radius = s
-        self.points = pts
-
-
-def draw_poly(points, ax, color):
-    xs = [p[0] for p in points] + [points[0][0]]
-    ys = [p[1] for p in points] + [points[0][1]]
-    ax.plot(xs, ys, color=color)
-
-def draw_ngon(n, radius):
-    polygon = Polygon(n, radius)
-    fig, ax = plt.subplots()
-    draw_poly(polygon.points, ax, color='blue')
-    plt.axis('equal')
-    plt.show()
-    return polygon
+        attachPoint = targetTile.worldVertices[targetEdgeIndex]
+        moveEdgeStartTo(self, myEdgeIndex, attachPoint[0], attachPoint[1])
