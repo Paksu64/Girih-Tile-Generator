@@ -1,9 +1,10 @@
 import turtle
 from tiles import (
-    PolygonTile,
+    DecagonTile,
+    PentagonTile,
     RhombusTile,
     ElongatedHexTile,
-    BowtieTile
+    BowtieTile,
 )
 
 def setupScreen():
@@ -18,20 +19,29 @@ def setupScreen():
     return screen
 
 def drawDemoTiles():
-    dec = PolygonTile(10, radius=200, x=0, y=0, angle=0)
+    decProto = DecagonTile()
+    dec = decProto.clone()
     dec.draw(color="#98dde9")
 
-    rhombus = RhombusTile(dec, edgeIndex=0)
-    hexTile = ElongatedHexTile(dec, edgeIndex=4)
-    bowtie = BowtieTile(dec, edgeIndex=7)
+    pentProto = PentagonTile()
+    rhombusProto = RhombusTile()
+    hexProto = ElongatedHexTile()
+    bowtieProto = BowtieTile()
 
-    rhombus.attachToEdge(dec, myEdgeIndex=0, targetEdgeIndex=0)
-    hexTile.attachToEdge(dec, myEdgeIndex=0, targetEdgeIndex=4)
-    bowtie.attachToEdge(dec, myEdgeIndex=0, targetEdgeIndex=7)
+    pent = pentProto.clone()
+    rhom = rhombusProto.clone()
+    hext = hexProto.clone()
+    bow  = bowtieProto.clone()
 
-    rhombus.draw(color="#989ce9")
-    hexTile.draw(color="#bde998")
-    bowtie.draw(color="#e99899")
+    pent.attachToEdge(dec, myEdgeIndex=0, targetEdgeIndex=1, outward=True)
+    rhom.attachToEdge(dec, myEdgeIndex=0, targetEdgeIndex=5, outward=True)
+    hext.attachToEdge(dec, myEdgeIndex=0, targetEdgeIndex=8, outward=True)
+    bow.attachToEdge(dec,  myEdgeIndex=1, targetEdgeIndex=0, outward=True)
+
+    pent.draw(color="#ffee77")
+    rhom.draw(color="#8894ff")
+    hext.draw(color="#88ff99")
+    bow.draw(color="#ff8899")
 
 def main():
     setupScreen()
