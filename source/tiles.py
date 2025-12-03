@@ -1,79 +1,40 @@
-import math
-from geometry import TileBase, rotateVector
+from dataclasses import dataclass, field
+from typing import List, Tuple, Dict
 
-sideLength = 60.0
+Vec2 = Tuple[float, float]
 
-class PolygonTile(TileBase):
-    def __init__(self, edgeCount):
-        angleStep = 360.0 / edgeCount
-        radius = sideLength / (2.0 * math.sin(math.pi / edgeCount))
-        verts = []
-        for i in range(edgeCount):
-            a = math.radians(i * angleStep)
-            verts.append((radius * math.cos(a), radius * math.sin(a)))
-        super().__init__("polygon", verts)
+# (36° units)
+TILE_ANGLES = [
+    [4,4,4,4,4,4,4,4,4,4],      # decagon
+    [2,4,4,2,4,4],              # elongated hex
+    [2,2,6,2,2,6],              # bowtie
+    [2,3,2,3],                  # rhombus
+    [3,3,3,3,3],                # pentagon
+]
 
-class PentagonTile(PolygonTile):
-    def __init__(self):
-        super().__init__(5)
+DLENS = [
+    [[0.96,0.96]] * 10,
+    [[0.61,0.61]] * 6,
+    [[0.38,0.38]] * 6,
+    [[0.44,0.44]] * 4,
+    [[0.44,0.44]] * 5,
+]
 
-class DecagonTile(PolygonTile):
-    def __init__(self):
-        super().__init__(10)
 
-class RhombusTile(TileBase):
-    def __init__(self, acuteDeg=72.0):
-        s = sideLength
-        A = (0.0, 0.0)
-        B = (s,   0.0)
+@dataclass
+class Point:
+    coords: Vec2
+    mask: List[int] = field(default_factory=lambda: [0]*10)
 
-        turnSeq = [acuteDeg, 180.0 - acuteDeg]
-        angle = 0.0
-        x, y = B
-        verts = [A, B]
+    def maskSum(self) -> int:
+        return sum(self.mask)
 
-        for t in turnSeq:
-            angle += t
-            x += s * math.cos(math.radians(angle))
-            y += s * math.sin(math.radians(angle))
-            verts.append((x, y))
 
-        super().__init__("rhombus", verts)
-
-class ElongatedHexTile(TileBase):
-    def __init__(self):
-        s = sideLength
-        A = (0.0, 0.0)
-        B = (s,   0.0)
-
-        turnSeq = [36.0, 108.0, 36.0, 36.0]
-        angle = 0.0
-        x, y = B
-        verts = [A, B]
-
-        for t in turnSeq:
-            angle += t
-            x += s * math.cos(math.radians(angle))
-            y += s * math.sin(math.radians(angle))
-            verts.append((x, y))
-
-        super().__init__("elongatedHex", verts)
-
-class BowtieTile(TileBase):
-    def __init__(self):
-        s = sideLength
-        A = (0.0, 0.0)
-        B = (s,   0.0)
-
-        turnSeq = [108.0, 324.0, 108.0, 108.0, 324.0]
-        angle = 0.0
-        x, y = B
-        verts = [A, B]
-
-        for t in turnSeq:
-            angle += t
-            x += s * math.cos(math.radians(angle))
-            y += s * math.sin(math.radians(angle))
-            verts.append((x, y))
-
-        super().__init__("bowtie", verts)
+@dataclass
+class Tile:
+    tileType: int                  # 0..4
+    pointIndexes: List[int]        # indices into points list
+    offset: int
+    sideLength: float
+    rotationDeg: float
+    masks: Dict[int, List[int]]    # pointIndex -> mask
