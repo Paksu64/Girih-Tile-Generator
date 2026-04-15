@@ -1,10 +1,10 @@
 # girih/generator.py
-
+from collections import deque
 import math, random
 from tiles import Point, Tile, TILE_ANGLES, DLENS
 from masks import masksCompatible, addMasks, removeMask
 
-EPS = 0.1
+EPS = 1e-6
 
 class GirihGenerator:
 
@@ -274,37 +274,103 @@ class GirihGenerator:
             return (-self.width/2 <= x <= self.width/2 and
                     -self.height/2 <= y <= self.height/2)
         return False
+    
+    def _pickClosestVisiblePoint(self):
+        """
+        self.pointDistances: [(pointIndex, distance), ...]
+        En küçük distance'a sahip ve görünür olan noktayı seçer.
+        Bulamazsa None döner.
+        """
+        if not self.pointDistances:
+            return None
+
+        # Mesafeye göre küçükten büyüğe (stabil) sırala
+        # (pointDistances zaten sıralıysa bu satırı kaldırabilirsin)
+        sorted_pd = sorted(self.pointDistances, key=lambda x: x[1])
+
+        for idx, _dist in sorted_pd:
+            if self.isVisiblePoint(idx):
+                return idx
+
+        return None
 
     def runGen1(self):
         if not self.tiles:
             self.addInitialDecagon()
 
-        for i in range(self.iterations):
+        i = 0
+        steps = 0
+        while i < len(self.points) and steps < self.iterations:
             if self.isVisiblePoint(i):
                 for _ in range(self.retries):
                     self.fillPoint(i, self.sideLength)
+            i += 1
+            steps += 1
 
     def runGen2(self):
         if not self.tiles:
             self.addInitialDecagon()
 
         for _ in range(self.iterations):
-            for idx, dist in self.pointDistances:
+            if not self.pointDistances:
+                break
+
+            placed_any = False
+
+            # Bu turda en fazla L kez aday dene (tümü görünmez olabilir)
+            L = len(self.pointDistances)
+            tried = 0
+
+            while tried < L and not placed_any:
+                idx = self._pickClosestVisiblePoint()
+                tried += 1
+
+                if idx is None:
+                    break
+
+                tiles_before = len(self.tiles)
+
                 for _ in range(self.retries):
                     self.fillPoint(idx, self.sideLength)
+
+                if len(self.tiles) > tiles_before:
+                    placed_any = True
+                else:
+                    # Bu idx başarısızsa, aynı idx tekrar seçilmesin diye listeden geçici çıkar
+                    # (pointDistances içinde tekil idx varsayımıyla)
+                    self.pointDistances = [(i, d) for (i, d) in self.pointDistances if i != idx]
+
+            if not placed_any:
+                break
+
 
     def runGen3(self):
         if not self.tiles:
             self.addInitialDecagon()
 
-        it = 0
-        rc = 0
-        while rc < self.retries:
-            if it < self.iterations:
-                if self.isVisiblePoint(it):
-                    for _ in range(self.retries):
-                        self.fillPoint(it, self.sideLength)
-                it += 1
-            else:
-                it = 0
-                rc += 1
+        q = deque([0])      # frontier queue
+        in_q = {0}          # tekrar eklemeyi önle
+        steps = 0
+
+        while q and steps < self.iterations:
+            idx = q.popleft()
+            in_q.discard(idx)
+
+            if not self.isVisiblePoint(idx):
+                steps += 1
+                continue
+
+            tiles_before = len(self.tiles)
+            points_before = len(self.points)
+
+            for _ in range(self.retries):
+                self.fillPoint(idx, self.sideLength)
+
+            # Eğer bu nokta gerçekten büyüme ürettiyse, yeni noktaları frontier'e kat
+            if len(self.tiles) > tiles_before:
+                for ni in range(points_before, len(self.points)):
+                    if ni not in in_q:
+                        q.append(ni)
+                        in_q.add(ni)
+
+            steps += 1

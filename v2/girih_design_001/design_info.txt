@@ -1,0 +1,17 @@
+Girih Design
+========================================
+
+Canvas : 600.0 × 600.0 mm
+Tile   : 25.0 mm side length
+Grid   : ~24.0 × 24.0 tiles
+
+Vertices : 530
+Tiles    : 301
+
+Tile breakdown
+--------------------
+  decagon           21
+  elong_hex         80
+  pentagon          10
+  bowtie             0
+  rhombus          190
