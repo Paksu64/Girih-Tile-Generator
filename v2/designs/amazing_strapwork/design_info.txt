@@ -1,9 +1,9 @@
 Girih Design
 ========================================
 
-Canvas : 600.0 × 600.0 mm
+Canvas : 710.0 × 710.0 mm
 Tile   : 25.0 mm side length
-Grid   : ~24.0 × 24.0 tiles
+Grid   : ~28.4 × 28.4 tiles
 
 Vertices : 530
 Tiles    : 301

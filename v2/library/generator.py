@@ -1,8 +1,8 @@
 # girih/generator.py
 from collections import deque
 import math, random
-from girih.tiles import Point, Tile, TILE_ANGLES, DLENS
-from girih.masks import masksCompatible, addMasks, removeMask
+from library.tiles import Point, Tile, TILE_ANGLES, DLENS
+from library.masks import masksCompatible, addMasks, removeMask
 
 EPS = 0.1
 

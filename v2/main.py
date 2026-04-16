@@ -11,7 +11,7 @@ Create a new symmetric design:
   python main.py --width 600mm --height 600mm --side 25mm --symmetry c10
 
 Load an existing design and continue growing it:
-  python main.py --load girih_design_001 --continue --iterations 300
+  python main.py --load strapwork_001 --continue --iterations 300
 """
 
 import argparse
@@ -23,10 +23,10 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from girih.export import TILE_NAMES, load_json, next_design_folder, run_exports
-from girih.generator import GirihGenerator
-from girih.tiles import Point, Tile
-from girih.units import DesignSpec, mm_to_px, parse_mm
+from library.export import TILE_NAMES, load_json, next_design_folder, run_exports
+from library.generator import GirihGenerator
+from library.tiles import Point, Tile
+from library.units import DesignSpec, mm_to_px, parse_mm
 
 
 def build_parser():
@@ -49,6 +49,16 @@ def build_parser():
         choices=["none", "c5", "c10"],
         default=None,
         help="Rotational symmetry mode for a new design, or an override when loading one.",
+    )
+    parser.add_argument(
+        "--groove", type=float, default=1.5, metavar="MM",
+        help="Groove width in mm for the engrave DXF (default 1.5mm).",
+    )
+    parser.add_argument(
+        "--preview",
+        choices=["full", "strapwork"],
+        default="full",
+        help="PNG/SVG preview mode: full = polygons + strapwork, strapwork = strapwork only.",
     )
     return parser
 
@@ -97,16 +107,49 @@ def print_stats(gen):
             print(f"  {name:<14} {count:>4}")
 
 
+def resolve_designs_dir():
+    designs_dir = os.path.join(os.path.dirname(__file__), "designs")
+    os.makedirs(designs_dir, exist_ok=True)
+    return designs_dir
+
+
+def resolve_load_folder(load_value, designs_dir):
+    if os.path.isabs(load_value):
+        return load_value
+
+    if os.path.isdir(load_value):
+        return load_value
+
+    candidate = os.path.join(designs_dir, load_value)
+    if os.path.isdir(candidate):
+        return candidate
+
+    return candidate
+
+
+def resolve_output_folder(output_value, designs_dir):
+    if output_value is None:
+        return next_design_folder(designs_dir)
+
+    if os.path.isabs(output_value):
+        return output_value
+
+    return os.path.join(designs_dir, output_value)
+
+
 def main():
     args = build_parser().parse_args()
 
     if args.seed is not None:
         random.seed(args.seed)
 
+    designs_dir = resolve_designs_dir()
+
     if args.load:
-        json_path = os.path.join(args.load, "design.json")
+        load_folder = resolve_load_folder(args.load, designs_dir)
+        json_path = os.path.join(load_folder, "design.json")
         if not os.path.isfile(json_path):
-            sys.exit(f"ERROR: no design.json in '{args.load}'")
+            sys.exit(f"ERROR: no design.json in '{load_folder}'")
 
         print(f"Loading {json_path} …")
         data = load_json(json_path)
@@ -167,21 +210,28 @@ def main():
         print(f"Done in {time.time() - t0:.1f}s")
 
     if args.output:
-        folder = args.output
+        folder = resolve_output_folder(args.output, designs_dir)
     elif args.load and not args.do_continue:
-        folder = args.load
+        folder = load_folder
     else:
-        folder = next_design_folder(".")
+        folder = next_design_folder(designs_dir)
 
     os.makedirs(folder, exist_ok=True)
 
     print_stats(gen)
 
     print(f"\nWriting {folder}/ …")
-    run_exports(gen, spec, folder)
+    run_exports(
+        gen,
+        spec,
+        folder,
+        groove_width_mm=args.groove,
+        preview_mode=args.preview,
+    )
     print(
         "  ✓  design.json\n"
         "  ✓  design.dxf\n"
+        "  ✓  design_engrave.dxf\n"
         "  ✓  design.svg\n"
         "  ✓  design.png\n"
         "  ✓  design_info.txt\n"
