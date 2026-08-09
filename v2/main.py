@@ -12,6 +12,15 @@ Create a new symmetric design:
 
 Load an existing design and continue growing it:
   python main.py --load strapwork_001 --continue --iterations 300
+
+Reconstruct a design from a photo of tile edges (experimental -- see
+experiments/ for status, real-photo results aren't solid yet):
+  python main.py --reconstruct photo.jpg --side 25mm --output recovered_001
+
+Repeat an existing design across a 2D grid, attaching copies at shared
+edges (side-to-side and top-to-top) -- no photo/detection involved, this
+is a separate tool, not a --reconstruct mode:
+  python pattern_tiling.py --load strapwork_001 --nx 3 --ny 2 --output big_panel
 """
 
 import argparse
@@ -40,6 +49,41 @@ def build_parser():
     parser.add_argument("--side", metavar="MM")
     parser.add_argument("--output", metavar="DIR")
     parser.add_argument("--load", metavar="DIR")
+    parser.add_argument(
+        "--reconstruct", metavar="IMAGE",
+        help="Recover a design.json from a photo/scan of girih tile edges instead of generating one.",
+    )
+    parser.add_argument(
+        "--corners", metavar="X1,Y1,X2,Y2,X3,Y3,X4,Y4",
+        help="Manual 4-point rectification for --reconstruct, if automatic panel-quad "
+             "detection fails or the image isn't a clean framed panel.",
+    )
+    parser.add_argument(
+        "--input-mode",
+        choices=["tile-edges", "periodic", "rotational"],
+        default="tile-edges",
+        help="What --reconstruct's image shows: tile-edges = physical tile/grout "
+             "boundaries; periodic = a repeating strip/panel pattern -- detects "
+             "the repeat period, reconstructs one clean unit, and attaches copies "
+             "at shared seams across the full image; rotational = a medallion/"
+             "rosette centered pattern -- detects the rotation center and fold "
+             "order (5 or 10), and fills sparse/damaged sectors by rotating a "
+             "well-reconstructed sector into place. Default: tile-edges. (A "
+             "strapwork mode was tried and parked in "
+             "experiments/experimental_strapwork/ -- its math is validated "
+             "but real-photo recall isn't there yet.)",
+    )
+    parser.add_argument(
+        "--copies", type=int, default=None,
+        help="For --input-mode periodic: how many repeats to replicate (default: as "
+             "many as fit the detected period).",
+    )
+    parser.add_argument(
+        "--damage-frac", type=float, default=0.5,
+        help="For --input-mode rotational: a sector with fewer than this fraction "
+             "of the best sector's vertex count is treated as damaged/empty and "
+             "filled by rotation (default: 0.5).",
+    )
     parser.add_argument("--continue", dest="do_continue", action="store_true")
     parser.add_argument("--iterations", type=int, default=400)
     parser.add_argument("--retries", type=int, default=10)
@@ -137,6 +181,67 @@ def resolve_output_folder(output_value, designs_dir):
     return os.path.join(designs_dir, output_value)
 
 
+def parse_corners(value):
+    if value is None:
+        return None
+    nums = [float(v) for v in value.split(",")]
+    if len(nums) != 8:
+        sys.exit("ERROR: --corners needs exactly 8 numbers: X1,Y1,X2,Y2,X3,Y3,X4,Y4")
+    return list(zip(nums[0::2], nums[1::2]))
+
+
+def run_reconstruct(args, designs_dir):
+    side_mm = parse_mm(args.side) if args.side else 25.0
+    folder = resolve_output_folder(args.output, designs_dir) if args.output else next_design_folder(designs_dir)
+    os.makedirs(folder, exist_ok=True)
+
+    print(f"Reconstructing from {args.reconstruct} (input mode: {args.input_mode}) …")
+
+    if args.input_mode == "periodic":
+        from experiments import periodic
+        result = periodic.run(
+            args.reconstruct, side_mm=side_mm, folder=folder,
+            groove_width_mm=args.groove, n_copies=args.copies,
+        )
+        print(f"Detected period : {result['period_px'][0]:.1f}px  (used {result['n_copies']} copies, "
+              f"confidence {result['period_confidence']:.3f})")
+        print(f"Unit            : {len(result['unit_tiles'])} tiles, {len(result['unit_vertices'])} vertices, "
+              f"{len(result['unit_unresolved'])} unresolved")
+    elif args.input_mode == "rotational":
+        from experiments import rotational
+        result = rotational.run(
+            args.reconstruct, side_mm=side_mm, folder=folder,
+            groove_width_mm=args.groove, damage_frac=args.damage_frac,
+        )
+        print(f"Detected center : {result['center_px']}  fold: {result['n']}  "
+              f"score: {result['symmetry_score']:.3f}")
+        print(f"Damaged sectors filled by rotation: {result['sector_stats']['damaged_sectors']}")
+    else:
+        from experiments import pipeline
+        corners = parse_corners(args.corners)
+        result = pipeline.run(
+            args.reconstruct, corners=corners, side_mm=side_mm,
+            folder=folder, groove_width_mm=args.groove, input_mode=args.input_mode,
+        )
+        print(f"Rectified   : {'yes' if result['rectified'] else 'no (no confident panel quad found)'}")
+        print(f"Unresolved  : {len(result['unresolved'])} face(s) (damage/occlusion/mis-detection)")
+
+    stats = result["stats"]
+    print(f"Vertices (full) : {stats['vertex_count']}")
+    print(f"Tiles (full)    : {stats['tile_count']}")
+    print(f"Mask conflicts  : {stats['mask_conflicts']}")
+    print(f"\nWriting {folder}/ …")
+    print(
+        "  ✓  design.json\n"
+        "  ✓  design.dxf\n"
+        "  ✓  design_engrave.dxf\n"
+        "  ✓  design.svg\n"
+        "  ✓  design.png\n"
+        "  ✓  design_info.txt\n"
+        "Done."
+    )
+
+
 def main():
     args = build_parser().parse_args()
 
@@ -144,6 +249,10 @@ def main():
         random.seed(args.seed)
 
     designs_dir = resolve_designs_dir()
+
+    if args.reconstruct:
+        run_reconstruct(args, designs_dir)
+        return
 
     if args.load:
         load_folder = resolve_load_folder(args.load, designs_dir)
