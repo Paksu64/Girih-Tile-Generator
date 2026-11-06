@@ -2,13 +2,13 @@
 
 **Procedural girih tilings from the five fundamental girih modules, exported as fabrication-ready DXF, SVG and PNG.**
 
-![Generated girih panel](v2/designs/big_panel/design.png)
+![Generated girih panel with tenfold symmetry](v2/designs/amazing_strapwork/design.png)
 
-Girih is the strapwork tradition of Islamic geometric art, documented in sources such as Panel 28 of the Topkapı Scroll. Its patterns are built from five equilateral tiles whose angles are all multiples of 36°, which gives them the D₅ / D₁₀ dihedral symmetry characteristic of decagonal, quasicrystal-like structures.
+Girih is the strapwork tradition of Islamic geometric art, documented in sources such as Panel 28 of the Topkapı Scroll. Its patterns are built from five equilateral tiles whose angles are all multiples of 36°, so every tile edge points in one of only ten directions. This is the source of the five- and tenfold order characteristic of decagonal, quasicrystal-like girih designs.
 
 This project grows girih tilings tile by tile, verifying every placement, then draws the decorative strapwork lines across them and exports the result at real physical dimensions, ready for laser cutting, CNC engraving or CAD.
 
-Developed for the **TÜBİTAK 2204-A High School Research Competition** (1st place regional, 3rd place national), and the basis of an academic paper currently in preparation.
+Developed for the **TÜBİTAK 2204-A High School Research Competition** (1st place regional, 3rd place national), and the basis of the preprint described [below](#paper).
 
 ---
 
@@ -35,8 +35,8 @@ Because 360° / 36° = 10, the full angle around any vertex splits into **10 ang
 3. **Fill.** For each open point inside the canvas, the generator tries to place tiles into its empty sectors, with several retries per point.
 4. **Placement tests.** A candidate tile is accepted only if every one of its corners passes:
    - **Angular compatibility:** its sector mask doesn't overlap the sectors already filled at that vertex, and it never leaves a single 36° gap, since no girih tile has a 36° corner to fill it.
-   - **Epsilon (ε) proximity:** a new corner that lands within ε of an existing vertex is merged into it, so floating-point drift doesn't create near-duplicate points.
-   - **Spacing:** no new vertex lands closer than (1 − ε) × side length to any existing vertex, which rules out overlapping tiles.
+   - **Epsilon (ε) proximity:** a new corner that lands within ε × side length (ε = 0.1) of an existing vertex is merged into it, so floating-point drift doesn't create near-duplicate points.
+   - **Spacing:** no new vertex lands closer than (1 − ε) × side length to any existing vertex. This heuristic prevents overlapping tiles in practice (no overlaps were found in our tests), although it is not an exact intersection test.
 5. **Merge.** Accepted masks are added into the vertex masks, and the tile's new vertices join the queue. A rejected tile is rolled back cleanly.
 6. **Stop.** Generation ends when the queue empties or the iteration limit is reached.
 7. **Strapwork.** From the midpoint of every tile edge, two strap lines are drawn inward at fixed angles and lengths per module, producing the interlaced girih star pattern.
@@ -47,7 +47,7 @@ Optional **C5 / C10 rotational symmetry** places each tile together with its rot
 
 ## Getting started
 
-**Requirements:** Python 3 and the packages in `v2/requirements.txt` (matplotlib, ezdxf, shapely, opencv-python, numpy, scipy).
+**Requirements:** Python 3 and the packages in `v2/requirements.txt` (matplotlib, ezdxf, shapely, numpy). The experimental photo reconstruction additionally needs opencv-python and scipy.
 
 ```bash
 git clone https://github.com/Paksu64/Girih-Tile-Generator.git
